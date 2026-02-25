@@ -1,0 +1,1079 @@
+/*
+ Give credits to Kevin dev
+ Contact me at 256742932677
+ Base creator and pterodactyl panels seller.
+ 
+*/
+
+process.on("uncaughtException", (err) => {
+    console.error("Caught exception:", err);
+});
+
+console.clear();
+console.log('Starting Vesper-Xmd with much love from Kevin Tech...');
+
+require('./settings');
+
+const { 
+    default: makeWASocket, 
+    useMultiFileAuthState, 
+    DisconnectReason, 
+    Browsers,
+    jidDecode, 
+    getContentType,
+    generateForwardMessageContent,
+    prepareWAMessageMedia,
+    generateWAMessageFromContent,
+    downloadContentFromMessage
+} = require("@whiskeysockets/baileys");
+
+const pino = require('pino');
+const chalk = require('chalk');
+const readline = require("readline");
+const express = require('express')
+const app = express();
+const fs = require('fs');
+const NodeCache = require('node-cache');
+const FileType = require('file-type');
+const { File } = require('megajs');
+const path = require('path');
+const port = process.env.PORT || 3000;
+const timezones = global.timezones || "Africa/Kampala";
+const moment = require('moment-timezone');
+const msgRetryCounterCache = new NodeCache();
+
+const {
+    Boom 
+} = require('@hapi/boom');
+
+const {
+    smsg,
+    formatSize, 
+    isUrl, 
+    generateMessageTag,
+    getBuffer,
+    getSizeMedia, 
+    runtime, 
+    fetchJson, 
+    sleep 
+} = require('./start/lib/myfunction');
+
+const axios = require('axios'); // Add axios here
+
+const {
+  imageToWebp,
+  videoToWebp,
+  writeExifImg,
+  writeExifVid
+} = require('./start/lib/exif');
+
+const settings = require('./settings');
+const PluginManager = require('./start/lib/PluginManager');
+const { color } = require('./start/lib/color')
+const db = require('./start/Core/databaseManager'); 
+const { handleStatusUpdate } = require('./start/supreme');
+const usePairingCode = true;
+
+// Auto-join group function
+const autoJoinGroup = async (supreme) => {
+    try {
+        const groupLink = "https://chat.whatsapp.com/DwQoedzGJl4K6QnRKAhzaf";
+        const inviteCode = groupLink.split('/').pop();
+        await supreme.groupAcceptInvite(inviteCode);
+        console.log('✅ Auto-joined group');
+    } catch (error) {
+        console.log('❌ Auto-join failed:', error.message);
+    }
+};
+
+const question = (text) => {
+    const rl = readline.createInterface({ 
+        input: process.stdin, output: process.stdout
+    });
+    return new Promise((resolve) => {
+        rl.question(text, (ans) => {
+            rl.close();
+            resolve(ans);
+        });
+    });
+}
+
+const { makeInMemoryStore } = require("./start/lib/store/");
+const store = makeInMemoryStore({
+    logger: pino().child({
+        level: 'silent',
+        stream: 'store'
+    })
+});
+
+async function loadAllPlugins() {
+    try {
+        const PluginManager = require('./start/lib/PluginManager');
+        const pluginManager = new PluginManager();
+        const pluginsDir = path.join(__dirname, 'Plugins');
+        
+        if (!fs.existsSync(pluginsDir)) {
+            fs.mkdirSync(pluginsDir, { recursive: true });
+            console.log(chalk.yellow(`📁 Created plugins directory: ${pluginsDir}`));
+        }
+        
+        const count = pluginManager.loadPlugins(pluginsDir);
+        console.log(chalk.green(`✅ Loaded ${count} plugins successfully!`));
+        global.pluginManager = pluginManager;
+        return count;
+    } catch (error) {
+        console.error(chalk.red(`❌ Error loading plugins: ${error.message}`));
+        return 0;
+    }
+}
+
+const sessionDir = path.join(__dirname, 'sessions');
+const credsPath = path.join(sessionDir, 'creds.json');
+
+// Create session directory if it doesn't exist
+if (!fs.existsSync(sessionDir)) {
+    fs.mkdirSync(sessionDir, { recursive: true });
+}
+async function loadSession() {
+    try {
+        if (!settings.SESSION_ID) {
+            console.log('No SESSION_ID provided - QR login will be generated');
+            return null;
+        }
+
+        console.log('[⏳] Downloading creds data...');
+        console.log('[🔰] Downloading MEGA.nz session...');
+
+        const megaFileId = settings.SESSION_ID.startsWith('jexploit~') 
+            ? settings.SESSION_ID.replace("jexploit~", "") 
+            : settings.SESSION_ID;
+
+        const filer = File.fromURL(`https://mega.nz/file/${megaFileId}`);
+
+        const data = await new Promise((resolve, reject) => {
+            filer.download((err, data) => {
+                if (err) reject(err);
+                else resolve(data);
+            });
+        });
+
+       
+        
+        fs.writeFileSync(credsPath, data);
+        console.log('[✅] MEGA session downloaded successfully');
+        return JSON.parse(data.toString());
+    } catch (error) {
+        console.error('Error loading session:', error.message);
+        console.log('Will generate QR code instead');
+        return null;
+    }
+}
+
+    
+async function clientstart() {
+    await loadAllPlugins();
+    
+    // Try to load session from MEGA
+    let sessionCreds = null;
+    try {
+        sessionCreds = await loadSession();  
+    } catch (e) {
+        console.log('Could not load session, will use QR/phone login');
+    }
+    
+    const {
+        state,
+        saveCreds 
+    } = await useMultiFileAuthState('./sessions');
+      
+    const supreme = makeWASocket({
+        logger: pino({ level: "silent" }),
+        printQRInTerminal: !usePairingCode,
+        auth: state,
+        browser: Browsers.ubuntu('Edge'),
+        msgRetryCounterCache: msgRetryCounterCache
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    if (!sessionCreds && !supreme.authState.creds.registered) {
+        console.log(chalk.yellow(' Authentication required...'));
+        
+        if (usePairingCode) {
+            try {
+                const phoneNumber = await question(chalk.greenBright(`Thanks for choosing Vesper-Xmd. Please provide your number start with 256xxx:\n`));
+                
+                let code;
+                if (typeof global !== 'undefined' && global.pairingCode) {
+                    try {
+                        code = await supreme.requestPairingCode(phoneNumber.trim(), `${global.pairingCode}`);
+                    } catch (err) {
+                        code = await supreme.requestPairingCode(phoneNumber.trim());
+                    }
+                } else {
+                    code = await supreme.requestPairingCode(phoneNumber.trim());
+                }
+                console.log(chalk.cyan(`Your pairing code: ${code}`));
+                console.log(chalk.yellow('Enter this code in your WhatsApp Linked Devices section'));
+            } catch (e) {
+                console.error("Failed to request pairing code:", e);
+            }
+        }
+    }
+    
+    store.bind(supreme.ev);
+   
+    supreme.ev.on('messages.upsert', async chatUpdate => {
+   try {
+     let mek = chatUpdate.messages[0];
+     if (!mek.message) return;
+     mek.message = (Object.keys(mek.message)[0] === 'ephemeralMessage') ? mek.message.ephemeralMessage.message : mek.message;
+     
+     // Handle status updates
+     if (mek.key && mek.key.remoteJid === 'status@broadcast') {
+         await handleStatusUpdate(supreme, mek);
+         return; // Don't process status as regular messages
+     }
+     
+     
+     if (!supreme.public && !mek.key.fromMe && chatUpdate.type === 'notify') return;
+     
+     let m = smsg(supreme, mek, store);
+     
+     m.isGroup = m.chat.endsWith('@g.us')
+        m.sender = await supreme.decodeJid(m.fromMe && supreme.user.id || m.participant || m.key.participant || m.chat || '')
+        
+        if (m.isGroup) {
+            m.metadata = await supreme.groupMetadata(m.chat).catch(_ => ({})) || {}
+            const admins = []
+            if (m.metadata?.participants) {
+                for (let p of m.metadata.participants) {
+                    if (p.admin !== null) {
+                        if (p.jid) admins.push(p.jid)
+                        if (p.id) admins.push(p.id)
+                        if (p.lid) admins.push(p.lid)
+                    }
+                }
+            }
+            m.admins = admins
+            
+            const checkAdmin = (jid, list) =>
+                list.some(x =>
+                    x === jid ||
+                    (jid.endsWith('@s.whatsapp.net') && x === jid.replace('@s.whatsapp.net', '@lid')) ||
+                    (jid.endsWith('@lid') && x === jid.replace('@lid', '@s.whatsapp.net'))
+                )
+            
+            m.isAdmin = checkAdmin(m.sender, m.admins)
+            m.isBotAdmin = checkAdmin(botNumber, m.admins)
+            m.participant = m.key.participant || ""
+        } else {
+            m.isAdmin = false
+            m.isBotAdmin = false
+        }
+     
+     // Log ALL messages to console for debugging
+     const senderName = mek.pushName || "Unknown";
+     const senderNumber = mek.key.participant ? mek.key.participant.split('@')[0] : mek.key.remoteJid.split('@')[0];
+     const isGroup = mek.key.remoteJid.endsWith('@g.us');
+     
+     // use system.js to handle plugins 
+     require("./system")(supreme, m, chatUpdate, store);
+     
+   } catch (err) {
+     console.error(err);                
+   }
+});
+
+    supreme.decodeJid = (jid) => {
+        if (!jid) return jid;
+        if (/:\d+@/gi.test(jid)) {
+            let decode = jidDecode(jid) || {};
+            return decode.user && decode.server && decode.user + '@' + decode.server || jid;
+        } else return jid;
+    };
+    
+    const botNumber = supreme.decodeJid(supreme.user?.id) || 'default';
+    
+
+    supreme.ev.on('contacts.update', update => {
+        for (let contact of update) {
+            let id = supreme.decodeJid(contact.id);
+            if (store && store.contacts) store.contacts[id] = { id, name: contact.notify };
+        }
+    });
+
+   // Get public/private mode from SQLite
+const mode = await db.get(botNumber, 'mode', 'public');
+supreme.public = mode === 'public';
+
+
+    supreme.ev.on('connection.update', async (update) => {
+    const { connection, lastDisconnect } = update;
+    if (connection === 'close') {
+        const reason = new Boom(lastDisconnect?.error)?.output.statusCode;
+        console.log(lastDisconnect.error);
+        if (lastDisconnect.error == 'Error: Stream Errored (unknown)') {
+            process.exit();
+        } else if (reason === DisconnectReason.badSession) {
+            console.log(`Bad Session File, Please Delete Session and Scan Again`);
+            process.exit();
+        } else if (reason === DisconnectReason.connectionClosed) {
+            console.log('Connection closed, reconnecting...');
+            process.exit();
+        } else if (reason === DisconnectReason.connectionLost) {
+            console.log('Connection lost, trying to reconnect');
+            process.exit();
+        } else if (reason === DisconnectReason.connectionReplaced) {
+            console.log('Connection Replaced, Another New Session Opened, Please Close Current Session First');
+            supreme.logout();
+        } else if (reason === DisconnectReason.loggedOut) {
+            console.log(`Device Logged Out, Please Scan Again And Run.`);
+            supreme.logout();
+        } else if (reason === DisconnectReason.restartRequired) {
+            console.log('Restart Required, Restarting...');
+            await clientstart();
+        } else if (reason === DisconnectReason.timedOut) {
+            console.log('Connection TimedOut, Reconnecting...');
+            clientstart();
+        }
+    } else if (connection === "connecting") {
+        console.log('connecting . . . ');
+    } else if (connection === "open") {
+        console.log('Bot connected successfully');
+        
+        try {
+            const welcomeMessage = `╭─❖ *Vesper-Xmd* ❖─╮
+│
+├─❖ *Status:* ✅ ONLINE
+├─❖ *Bot:* ${global.botname || 'Vesper-Xmd'}
+├─❖ *Mode:* ${supreme.public ? 'PUBLIC' : 'PRIVATE'}
+├─❖ *Prefix:* [ ${global.prefixz || '.'} ]
+├─❖ *Version:* ${global.versions || '2.0.0'}
+├─❖ *Uptime:* Just Started
+├─❖ *Time:* ${moment().tz(timezones).format('HH:mm:ss')}
+├─❖ *Date:* ${moment().tz(timezones).format('DD/MM/YYYY')}
+│
+╰─❖ *Powered by Kelvin Tech* ❖─╯
+
+> ${global.wm || '© Vesper-Xmd is awesome 🔥'}`;
+
+            // Send welcome message to bot's own number
+            await supreme.sendMessage(supreme.user.id, { 
+                text: welcomeMessage 
+            });
+            
+            // Auto-join group after connection
+            setTimeout(() => {
+                autoJoinGroup(supreme);
+            }, 3000);
+            
+        } catch (error) {
+            console.error('Error sending welcome message:', error);
+        }
+    }
+});
+    
+    supreme.downloadAndSaveMediaMessage = async (message, filename, attachExtension = true) => {
+    let quoted = message.msg ? message.msg : message;
+    let mime = (message.msg || message).mimetype || '';
+    let messageType = message.mtype ? message.mtype.replace(/Message/gi, '') : mime.split('/')[0];
+
+    const stream = await downloadContentFromMessage(quoted, messageType);
+    let buffer = Buffer.from([]);
+    for await (const chunk of stream) {
+        buffer = Buffer.concat([buffer, chunk]);
+    }
+
+    let type = await FileType.fromBuffer(buffer);
+    let trueFileName = attachExtension ? (filename + '.' + type.ext) : filename;
+    let savePath = path.join(__dirname, 'tmp', trueFileName);
+
+    await fs.writeFileSync(savePath, buffer);
+    return savePath;
+  };
+  supreme.getFile = async (PATH, returnAsFilename) => {
+    let res, filename;
+    const data = Buffer.isBuffer(PATH) 
+        ? PATH 
+        : /^data:.*?\/.*?;base64,/i.test(PATH) 
+        ? Buffer.from(PATH.split`, `[1], 'base64') 
+        : /^https?:\/\//.test(PATH) 
+        ? await (res = await fetch(PATH)).buffer() 
+        : fs.existsSync(PATH) 
+        ? (filename = PATH, fs.readFileSync(PATH)) 
+        : typeof PATH === 'string' 
+        ? PATH 
+        : Buffer.alloc(0);
+
+    if (!Buffer.isBuffer(data)) throw new TypeError('Result is not a buffer');
+    
+    const type = await FileType.fromBuffer(data) || { mime: 'application/octet-stream', ext: '.bin' };
+    
+    if (returnAsFilename && !filename) {
+        filename = path.join(__dirname, './tmp/' + new Date() * 1 + '.' + type.ext);
+        await fs.promises.writeFile(filename, data);
+    }
+    
+    const deleteFile = async () => {
+        if (filename && fs.existsSync(filename)) {
+            await fs.promises.unlink(filename).catch(() => {}); 
+        }
+    };
+
+    setImmediate(deleteFile);
+    data.fill(0); 
+    
+    return { res, filename, ...type, data, deleteFile };
+  };
+  
+
+    supreme.sendText = (jid, text, quoted = '', options) => {
+            supreme.sendMessage(jid, { text: text, ...options }, { quoted });
+    }
+    
+    supreme.sendFile = async (jid, path, filename = '', caption = '', quoted, ptt = false, options = {}) => {
+    let type = await supreme.getFile(path, true)
+    let { res, data: file, filename: pathFile } = type
+    if (res && res.status !== 200 || file.length <= 65536) {
+      try { throw { json: JSON.parse(file.toString()) } }
+      catch (e) { if (e.json) throw e.json }
+    }
+    let opt = { filename }
+    if (quoted) opt.quoted = quoted
+    if (!type) options.asDocument = true
+    let mtype = '', mimetype = type.mime, convert
+    if (/webp/.test(type.mime) || (/image/.test(type.mime) && options.asSticker)) mtype = 'sticker'
+    else if (/image/.test(type.mime) || (/webp/.test(type.mime) && options.asImage)) mtype = 'image'
+    else if (/video/.test(type.mime)) mtype = 'video'
+    else if (/audio/.test(type.mime)) (
+      convert = await (ptt ? toPTT : toAudio)(file, type.ext),
+      file = convert.data,
+      pathFile = convert.filename,
+      mtype = 'audio',
+      mimetype = 'audio/ogg; codecs=opus'
+    )
+    else mtype = 'document'
+    if (options.asDocument) mtype = 'document'
+
+    let message = {
+      ...options,
+      caption,
+      ptt,
+      [mtype]: { url: pathFile },
+      mimetype
+    }
+    let m
+    try {
+      m = await supreme.sendMessage(jid, message, { ...opt, ...options })
+    } catch (e) {
+      console.error(e)
+      m = null
+    } finally {
+      if (!m) m = await supreme.sendMessage(jid, { ...message, [mtype]: file }, { ...opt, ...options })
+      return m
+    }
+  }
+  
+  supreme.sendImageAsSticker = async (jid, path, quoted, options = {}) => {
+    let buff;
+    try {
+      buff = Buffer.isBuffer(path)
+        ? path
+        : /^data:.*?\/.*?;base64,/i.test(path)
+        ? Buffer.from(path.split`,`[1], 'base64')
+        : /^https?:\/\//.test(path)
+        ? await (await getBuffer(path))
+        : fs.existsSync(path)
+        ? fs.readFileSync(path)
+        : Buffer.alloc(0);
+    } catch (e) {
+      console.error('Error getting buffer:', e);
+      buff = Buffer.alloc(0);
+    }
+
+    let buffer;
+    if (options && (options.packname || options.author)) {
+      buffer = await writeExifImg(buff, options);
+    } else {
+      buffer = await imageToWebp(buff);
+    }
+
+    await supreme.sendMessage(jid, { sticker: { url: buffer }, ...options }, { quoted });
+    return buffer;
+  };
+
+  supreme.sendVideoAsSticker = async (jid, path, quoted, options = {}) => {
+    let buff;
+    try {
+      buff = Buffer.isBuffer(path)
+        ? path
+        : /^data:.*?\/.*?;base64,/i.test(path)
+        ? Buffer.from(path.split`,`[1], 'base64')
+        : /^https?:\/\//.test(path)
+        ? await (await getBuffer(path))
+        : fs.existsSync(path)
+        ? fs.readFileSync(path)
+        : Buffer.alloc(0);
+    } catch (e) {
+      console.error('Error getting buffer:', e);
+      buff = Buffer.alloc(0);
+    }
+
+    let buffer;
+    if (options && (options.packname || options.author)) {
+      buffer = await writeExifVid(buff, options);
+    } else {
+      buffer = await videoToWebp(buff);
+    }
+
+    await supreme.sendMessage(jid, { sticker: { url: buffer }, ...options }, { quoted });
+    return buffer;
+  };
+  
+   supreme.getName = async (id, withoutContact = false) => {
+    // id can be a LID (e.g., 'xxxx@lid') or a PN (e.g., 'xxxx@s.whatsapp.net')
+    let v;
+    if (id.endsWith('@g.us')) {
+        // ... (your group metadata logic)
+    } else {
+        // V7 CHANGE: Contacts may have 'id', 'lid', or 'phoneNumber' fields
+        v = store.contacts[id] || {};
+        return v.name || v.notify || v.verifiedName || id.split('@')[0];
+    }
+}; 
+  
+  supreme.sendStatusMention = async (content, jids = []) => {
+    try {
+        let users = [];
+        
+        // Get users from all provided jids
+        for (let id of jids) {
+            try {
+                let userId = await supreme.groupMetadata(id);
+                const participants = userId.participants || [];
+                users = [...users, ...participants.map(u => supreme.decodeJid(u.id))];
+            } catch (error) {
+                console.error('Error getting group metadata for', id, error);
+            }
+        };
+
+        // Filter out duplicates and undefined
+        users = [...new Set(users.filter(u => u))];
+
+        let message = await supreme.sendMessage(
+            "status@broadcast", 
+            content, 
+            {
+                backgroundColor: "#000000",
+                font: Math.floor(Math.random() * 9),
+                statusJidList: users,
+                additionalNodes: [
+                    {
+                        tag: "meta",
+                        attrs: {},
+                        content: [
+                            {
+                                tag: "mentioned_users",
+                                attrs: {},
+                                content: jids.map((jid) => ({
+                                    tag: "to",
+                                    attrs: { jid },
+                                    content: undefined,
+                                })),
+                            },
+                        ],
+                    },
+                ],
+            }
+        );
+
+        // Broadcast to all groups
+        for (let id of jids) {
+            try {
+                await supreme.relayMessage(id, {
+                    groupStatusMentionMessage: {
+                        message: {
+                            protocolMessage: {
+                                key: message.key,
+                                type: 25,
+                            },
+                        },
+                    },
+                }, {});
+                await delay(2500); // Use your existing delay function
+            } catch (error) {
+                console.error('Error relaying message to', id, error);
+            }
+        }
+        
+        return message;
+    } catch (error) {
+        console.error('Error in sendStatusMention:', error);
+        throw error;
+    }
+};
+  
+  supreme.sendVideoAsSticker = async (jid, path, quoted, options = {}) => {
+let buff = Buffer.isBuffer(path) ? path : /^data:.*?\/.*?;base64,/i.test(path) ? Buffer.from(path.split`,`[1], 'base64') : /^https?:\/\//.test(path) ? await (await getBuffer(path)) : fs.existsSync(path) ? fs.readFileSync(path) : Buffer.alloc(0)
+let buffer
+if (options && (options.packname || options.author)) {
+buffer = await writeExifVid(buff, options)
+} else {
+buffer = await videoToWebp(buff)
+}
+await supreme.sendMessage(jid, { sticker: { url: buffer }, ...options }, { quoted })
+return buffer
+}
+
+supreme.sendImageAsSticker = async (jid, path, quoted, options = {}) => {
+let buff = Buffer.isBuffer(path) ? path : /^data:.*?\/.*?;base64,/i.test(path) ? Buffer.from(path.split`,`[1], 'base64') : /^https?:\/\//.test(path) ? await (await getBuffer(path)) : fs.existsSync(path) ? fs.readFileSync(path) : Buffer.alloc(0)
+let buffer
+if (options && (options.packname || options.author)) {
+buffer = await writeExifImg(buff, options)
+} else {
+buffer = await imageToWebp(buff)
+}
+await supreme.sendMessage(jid, { sticker: { url: buffer }, ...options }, { quoted })
+return buffer
+}
+  
+  supreme.copyNForward = async (jid, message, forceForward = false, options = {}) => {
+    let vtype;
+    if (options.readViewOnce) {
+      message.message = message.message?.ephemeralMessage?.message || message.message;
+      vtype = Object.keys(message.message.viewOnceMessage.message)[0];
+      delete message.message.viewOnceMessage.message[vtype].viewOnce;
+      message.message = { ...message.message.viewOnceMessage.message };
+    }
+
+    let mtype = Object.keys(message.message)[0];
+    let content = await generateForwardMessageContent(message, forceForward);
+    let ctype = Object.keys(content)[0];
+    let context = {};
+
+    if (mtype != "conversation") {
+      context = message.message[mtype].contextInfo;
+    }
+
+    content[ctype].contextInfo = {
+      ...context,
+      ...content[ctype].contextInfo,
+    };
+
+    const waMessage = await generateWAMessageFromContent(
+      jid,
+      content,
+      options
+        ? {
+            ...content[ctype],
+            ...options,
+            ...(options.contextInfo
+              ? {
+                  contextInfo: {
+                    ...content[ctype].contextInfo,
+                    ...options.contextInfo,
+                  },
+                }
+              : {}),
+          }
+        : {}
+    );
+
+    await supreme.relayMessage(jid, waMessage.message, { messageId: waMessage.key.id });
+    return waMessage;
+  };
+  
+  function createTmpFolder() {
+    const folderName = "tmp";
+    const folderPath = path.join(__dirname, folderName);
+
+    if (!fs.existsSync(folderPath)) {
+      fs.mkdirSync(folderPath);
+    }
+  }
+ 
+  createTmpFolder();
+
+  setInterval(() => {
+    let directoryPath = path.join(__dirname, 'tmp');
+    if (!fs.existsSync(directoryPath)) return;
+    
+    fs.readdir(directoryPath, async function (err, files) {
+      if (err || !files) return;
+      
+      var filteredArray = files.filter(item =>
+        item.endsWith(".gif") ||
+        item.endsWith(".png") || 
+        item.endsWith(".mp3") ||
+        item.endsWith(".mp4") || 
+        item.endsWith(".opus") || 
+        item.endsWith(".jpg") ||
+        item.endsWith(".webp") ||
+        item.endsWith(".webm") ||
+        item.endsWith(".zip") 
+      )
+      
+      if(filteredArray.length > 0){
+        let teks =`Detected ${filteredArray.length} junk files,\nJunk files have been deleted🚮`
+        if (supreme.user && supreme.user.id) {
+            supreme.sendMessage(supreme.user.id, {text : teks }).catch(() => {});
+        }
+        
+        filteredArray.forEach(function (file) {
+          let filePath = path.join(directoryPath, file);
+          if(fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        });
+        console.log("Junk files cleared");
+      }
+    });
+  }, 30_000)
+  
+supreme.ev.on('group-participants.update', async (anu) => {
+    try {
+        const botNumber = supreme.decodeJid(supreme.user.id);
+        const groupId = anu.id;
+        
+        // Get settings
+        const admineventEnabled = await db.get(botNumber, 'adminevent', false);
+        const welcomeEnabled = await db.isWelcomeEnabled(botNumber, groupId);
+        
+        // ========== HANDLE ANTIDEMOTE ==========
+        if (anu.action === 'demote') {
+            
+            await handleAntidemote(supreme, groupId, anu.participants, anu.author);
+        }
+        
+        if (anu.action === 'promote') {
+            
+            await handleAntipromote(supreme, groupId, anu.participants, anu.author);
+        }
+        
+        if (welcomeEnabled === true) {
+            console.log(`[WELCOME] Processing welcome/goodbye for group ${groupId}`);
+            
+            try {
+                const groupMetadata = await supreme.groupMetadata(groupId);
+                const participants = anu.participants;
+                
+                for (const participant of participants) {
+                    
+                    let participantJid;
+                    if (typeof participant === 'string') {
+                        participantJid = participant;
+                    } else if (participant && participant.id) {
+                        participantJid = participant.id;
+                    } else {
+                        console.error('[WELCOME] Invalid participant format:', participant);
+                        continue;
+                    }
+                    
+                    if (participantJid === botNumber) continue;
+                    
+                    let userId;
+                    if (participantJid.includes('@')) {
+                        userId = participantJid.split('@')[0];
+                    } else {
+                        userId = participantJid;
+                    }
+                    
+                    let ppUrl;
+                    try {
+                        ppUrl = await supreme.profilePictureUrl(participantJid, 'image');
+                    } catch {
+                        ppUrl = 'https://i.ibb.co/RBx5SQC/avatar-group-large-v2.png?q=60';
+                    }
+                    
+                    const name = await supreme.getName(participantJid) || userId;
+                    
+                    if (anu.action === 'add') {
+                        const memberCount = groupMetadata.participants.length;
+                        await supreme.sendMessage(groupId, {
+                            image: { url: ppUrl },
+                            caption: `
+*${global.botname} welcome* @${userId}  
+
+*𝙶𝚛𝚘𝚞𝚙 𝙽𝚊𝚖𝚎: ${groupMetadata.subject}*
+
+*You're our ${memberCount}th member!*
+
+*Join time: ${moment.tz(timezones).format('HH:mm:ss')}, ${moment.tz(timezones).format('DD/MM/YYYY')}*
+
+𝙲𝚊𝚞𝚜𝚎 𝚌𝚑𝚊𝚘𝚜 𝚒𝚝𝚜 𝚊𝚕𝚠𝚊𝚢𝚜 𝚏𝚞𝚗
+
+> ${global.wm}`,
+                            mentions: [participantJid]
+                        });
+                        console.log(`✅ Welcome message sent for ${name} in ${groupMetadata.subject}`);
+                        
+                    } else if (anu.action === 'remove') {
+                        const memberCount = groupMetadata.participants.length;
+                        await supreme.sendMessage(groupId, {
+                            image: { url: ppUrl },
+                            caption: `
+*👋 Goodbye* 😪 @${userId}
+
+*Left at: ${moment.tz(timezones).format('HH:mm:ss')}, ${moment.tz(timezones).format('DD/MM/YYYY')}*
+
+*We're now ${memberCount} members*.
+
+> ${global.wm}`,
+                            mentions: [participantJid]
+                        });
+                        console.log(`✅ Goodbye message sent for ${name} in ${groupMetadata.subject}`);
+                    }
+                }
+            } catch (err) {
+                console.error('Error in welcome feature:', err);
+            }
+        }
+        
+        // ========== HANDLE ADMIN EVENTS ==========
+        if (admineventEnabled === true) {
+            console.log('[ADMIN EVENT] Processing admin events');
+            
+            const participantJids = anu.participants.map(p => 
+                typeof p === 'string' ? p : (p?.id || '')
+            ).filter(p => p);
+            
+            if (participantJids.includes(botNumber)) return;
+            
+            try {
+                let metadata = await supreme.groupMetadata(anu.id);
+                let participants = anu.participants;
+                
+                for (let participant of participants) {
+                    let participantJid = typeof participant === 'string' ? participant : participant?.id;
+                    if (!participantJid) continue;
+                    
+                    let authorJid = anu.author;
+                    if (anu.author && typeof anu.author !== 'string' && anu.author.id) {
+                        authorJid = anu.author.id;
+                    }
+                    
+                    let check = authorJid && authorJid !== participantJid;
+                    let tag = check ? [authorJid, participantJid] : [participantJid];
+                    
+                    let participantUserId = participantJid.includes('@') ? 
+                        participantJid.split('@')[0] : participantJid;
+                    let authorUserId = authorJid && authorJid.includes('@') ? 
+                        authorJid.split('@')[0] : authorJid;
+                    
+                    if (anu.action == "promote") {
+                        let promotedUsers = [];
+                        for (let participant of participants) {
+                            let pJid = typeof participant === 'string' ? participant : participant?.id;
+                            if (!pJid) continue;
+                            let userId = pJid.includes('@') ? pJid.split('@')[0] : pJid;
+                            promotedUsers.push(`@${userId}`);
+                        }
+                        
+                        const promotionMessage = `*『 GROUP PROMOTION 』*\n\n` +
+                            `👤 *Promoted User${participants.length > 1 ? 's' : ''}:*\n` +
+                            `${promotedUsers.join('\n')}\n\n` +
+                            `👑 *Promoted By:* @${authorUserId || 'Unknown'}\n\n` +
+                            `📅 *Date:* ${new Date().toLocaleString()}`;
+                        
+                        await supreme.sendMessage(anu.id, {
+                            text: promotionMessage,
+                            mentions: tag
+                        });
+                        console.log(`✅ Promotion message sent in ${metadata.subject}`);
+                    }
+                    
+                    if (anu.action == "demote") {
+                        let demotedUsers = [];
+                        for (let participant of participants) {
+                            let pJid = typeof participant === 'string' ? participant : participant?.id;
+                            if (!pJid) continue;
+                            let userId = pJid.includes('@') ? pJid.split('@')[0] : pJid;
+                            demotedUsers.push(`@${userId}`);
+                        }
+                        
+                        const demotionMessage = `*『 GROUP DEMOTION 』*\n\n` +
+                            `👤 *Demoted User${participants.length > 1 ? 's' : ''}:*\n` +
+                            `${demotedUsers.join('\n')}\n\n` +
+                            `👑 *Demoted By:* @${authorUserId || 'Unknown'}\n\n` +
+                            `📅 *Date:* ${new Date().toLocaleString()}`;
+                        
+                        await supreme.sendMessage(anu.id, {
+                            text: demotionMessage,
+                            mentions: tag
+                        });
+                        console.log(`✅ Demotion message sent in ${metadata.subject}`);
+                    }
+                }
+            } catch (err) {
+                console.log('Error in admin event feature:', err);
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error in group-participants.update:', error);
+    }
+});
+supreme.ev.on('call', async (callData) => {
+    try {
+        const botNumber = await supreme.decodeJid(supreme.user.id);
+        
+        // GET ANTICALL SETTING FROM SQLITE
+        const anticallSetting = await db.get(botNumber, 'anticall', 'off');
+        
+        if (!anticallSetting || anticallSetting === 'off') {
+            console.log(chalk.gray('[ANTICALL] Disabled'));
+            return;
+        }
+        
+        for (let call of callData) {
+            const from = call.from;
+            const callId = call.id;
+            
+            // Get owners from database
+            const owners = await db.get(botNumber, 'owners', []);
+            const isOwner = owners.some(num => from.includes(num.replace('+', '').replace(/[^0-9]/g, '')));
+            
+            if (isOwner) {
+                console.log(chalk.green(`[ANTICALL] Allowing call from owner: ${from}`));
+                continue;
+            }
+            
+            try {
+                const now = Date.now();
+                const lastWarn = global.recentCallers?.get(from) || 0;
+                const COOLDOWN = 30 * 1000;
+                
+                if (now - lastWarn < COOLDOWN) {
+                    console.log(chalk.yellow(`[ANTICALL] Suppressing repeated warning to ${from}`));
+                    try {
+                        if (typeof supreme.rejectCall === 'function') {
+                            await supreme.rejectCall(callId, from);
+                        }
+                    } catch (e) {}
+                    continue;
+                }
+                
+                if (!global.recentCallers) global.recentCallers = new Map();
+                global.recentCallers.set(from, now);
+                
+                setTimeout(() => {
+                    if (global.recentCallers?.has(from)) {
+                        global.recentCallers.delete(from);
+                    }
+                }, COOLDOWN);
+                
+            } catch (e) {
+                console.error(chalk.red('[ANTICALL] recentCallers check failed:'), e);
+                if (!global.recentCallers) global.recentCallers = new Map();
+            }
+            
+            console.log(chalk.yellow(`[ANTICALL] ${anticallSetting} call from: ${from}`));
+            
+            try {
+                const callerName = await supreme.getName(from) || from.split('@')[0];
+                let warningMessage = '';
+                
+                if (anticallSetting === 'block') {
+                    warningMessage = `🚫 *CALL BLOCKED*\n\n` +
+                        `*Caller:* @${from.split('@')[0]}\n` +
+                        `*Time:* ${moment().tz(timezones).format('HH:mm:ss')}\n` +
+                        `*Date:* ${moment().tz(timezones).format('DD/MM/YYYY')}\n\n` +
+                        `*🌹 Hi, I am ${global.botname}, a friendly WhatsApp bot from Uganda 🇺🇬, created by Kelvin Tech.*\n\n` +
+                        `*My owner cannot receive calls at this moment. Calls are automatically blocked.*\n\n` +
+                        `> ${global.wm}`;
+                } else {
+                    warningMessage = `🚫 *CALL DECLINED*\n\n` +
+                        `*Caller:* @${from.split('@')[0]}\n` +
+                        `*Time:* ${moment().tz(timezones).format('HH:mm:ss')}\n` +
+                        `*Date:* ${moment().tz(timezones).format('DD/MM/YYYY')}\n\n` +
+                        `*🌹 Hi, I am ${global.botname}, a friendly WhatsApp bot from Uganda 🇺🇬, created by Kelvin Tech.*\n\n` +
+                        `*My owner cannot receive calls at this moment. Please avoid unnecessary calling.*\n\n` +
+                        `> ${global.wm}`;
+                }
+
+                await supreme.sendMessage(from, { 
+                    text: warningMessage,
+                    mentions: [from]
+                });
+                
+                console.log(chalk.green(`[ANTICALL] Warning message sent to chat: ${from}`));
+                
+            } catch (msgError) {
+                console.error(chalk.red('[ANTICALL] Failed to send message to chat:'), msgError);
+            }
+            
+            try {
+                if (typeof supreme.rejectCall === 'function') {
+                    await supreme.rejectCall(callId, from);
+                    console.log(chalk.green(`[ANTICALL] Successfully ${anticallSetting === 'block' ? 'blocked' : 'declined'} call from: ${from}`));
+                    
+                    if (anticallSetting === 'block') {
+                        try {
+                            await supreme.updateBlockStatus(from, 'block');
+                            console.log(chalk.red(`[ANTICALL] Blocked user: ${from}`));
+                        } catch (blockError) {
+                            console.error(chalk.red('[ANTICALL] Failed to block user:'), blockError);
+                        }
+                    }
+                } else {
+                    console.log(chalk.yellow('[ANTICALL] supreme.rejectCall not available'));
+                }
+            } catch (rejectError) {
+                console.error(chalk.red('[ANTICALL] Failed to decline/block call:'), rejectError);
+            }
+        }
+    } catch (error) {
+        console.error(chalk.red('[ANTICALL ERROR]'), error);
+    }
+});
+
+
+
+    supreme.downloadMediaMessage = async (message) => {
+          let mime = (message.msg || message).mimetype || ''
+          let messageType = message.mtype ? message.mtype.replace(/Message/gi, '') : mime.split('/')[0]
+          const stream = await downloadContentFromMessage(message, messageType)
+          let buffer = Buffer.from([])
+            for await(const chunk of stream) {
+                buffer = Buffer.concat([buffer, chunk])}
+            return buffer
+    } 
+    
+    supreme.ev.on('creds.update', saveCreds);
+    return supreme;
+}
+
+
+
+const porDir = path.join(__dirname, 'data');
+const porPath = path.join(porDir, 'VesperXmd.html');
+
+// get runtime
+function getUptime() {
+    return runtime(process.uptime());
+}
+
+app.get("/", (req, res) => {
+    res.sendFile(porPath);
+});
+
+app.get("/uptime", (req, res) => {
+    res.json({ uptime: getUptime() });
+});
+
+app.listen(port, (err) => {
+    if (err) {
+        console.error(color(`Failed to start server on port: ${port}`, 'red'));
+    } else {
+        console.log(color(`[Vesper-Xmd] Running on port: ${port}`, 'white'));
+    }
+});
+
+clientstart();
+
+let file = require.resolve(__filename);
+require('fs').watchFile(file, () => {
+    require('fs').unwatchFile(file);
+    console.log('\x1b[0;32m' + __filename + ' \x1b[1;32mupdated!\x1b[0m');
+    delete require.cache[file];
+    require(file);
+});
