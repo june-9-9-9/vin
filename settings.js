@@ -4,7 +4,7 @@
 const settings = {
   SESSION_ID: "", // enter here your session id
   ownername: "ᴋᴇʟᴠɪɴ ᴛᴇᴄʜ",
-  botname: "VESPE-XMD",
+  botname: "JUNE-X",
   prefa: ['.', '!'],
   owner: ["256754550399"]
 };

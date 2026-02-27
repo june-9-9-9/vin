@@ -3,7 +3,7 @@
  Contact me at 256742932677
  Base creator and pterodactyl panels seller.
  
- Complete Vesper-Xmd Bot - Full Version
+ Complete JUNE-X Bot - Full Version
  © 2025 supreme
 */
 
@@ -12,7 +12,7 @@ process.on("uncaughtException", (err) => {
 });
 
 console.clear();
-console.log('🚀 Starting Vesper-Xmd Complete Edition...');
+console.log('🚀 Starting JUNE-X Complete Edition...');
 
 // ==================== REQUIREMENTS ====================
 const { 
@@ -71,9 +71,9 @@ const SESSION_ERROR_FILE = path.join(__dirname, 'sessionErrorCount.json');
 // ==================== GLOBAL VARIABLES ====================
 global.isBotConnected = false;
 global.errorRetryCount = 0;
-global.botname = settings.botname || "Vesper-Xmd";
+global.botname = settings.botname || "JUNE-X";
 global.themeemoji = "•";
-global.wm = settings.wm || "© Vesper-Xmd";
+global.wm = settings.wm || "© JUNE-X";
 global.prefix = settings.prefix || ".";
 global.messageBackup = {};
 global.recentCallers = new Map();
@@ -82,13 +82,13 @@ global.pluginManager = null;
 // ==================== LOGGING FUNCTION ====================
 function log(message, type = 'info') {
     const colors = {
-        info: chalk.blue,
+        info: chalk.cyan || chalk.blue,
         success: chalk.green,
         error: chalk.red,
         warn: chalk.yellow,
         auth: chalk.magenta,
         conn: chalk.cyan,
-        system: chalk.gray
+        system: chalk.white || chalk.gray
     };
     
     const prefixes = {
@@ -102,7 +102,8 @@ function log(message, type = 'info') {
     };
     
     const timestamp = moment().tz(timezones).format('HH:mm:ss');
-    console.log(`${chalk.gray(`[${timestamp}]`)} ${prefixes[type]} ${colors[type](message)}`);
+    const colorFn = colors[type] || ((msg) => msg);
+    console.log(`[${timestamp}] ${prefixes[type]} ${colorFn(message)}`);
 }
 
 // ==================== STORE SETUP ====================
@@ -199,7 +200,7 @@ async function loadSessionFromId() {
         }
         
         // Handle base64 sessions
-        const sessionMatch = settings.SESSION_ID.match(/(?:Vesper-Xmd:~)?(.+)/);
+        const sessionMatch = settings.SESSION_ID.match(/(?:JUNE-X:~)?(.+)/);
         if (sessionMatch) {
             const base64Data = sessionMatch[1];
             const sessionData = Buffer.from(base64Data, 'base64');
@@ -359,7 +360,7 @@ async function handlePairing(sock) {
     log('='.repeat(50), 'auth');
     console.log('');
     
-    const phoneNumber = await question(chalk.cyan('📱 Enter your WhatsApp number (with country code): '));
+    const phoneNumber = await question('📱 Enter your WhatsApp number (with country code): ');
     const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
     
     if (cleanNumber.length < 10) {
@@ -442,7 +443,7 @@ async function sendWelcomeMessage(sock) {
 
 // ==================== MAIN BOT FUNCTION ====================
 async function startBot() {
-    log('Initializing Vesper-Xmd...', 'system');
+    log('Initializing JUNE-X...', 'system');
     
     // Load error count
     global.errorRetryCount = loadErrorCount().count;
@@ -1014,7 +1015,7 @@ app.get('/', (req, res) => {
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Vesper-Xmd Bot</title>
+        <title>JUNE-X Bot</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
             body {
@@ -1071,7 +1072,7 @@ app.get('/', (req, res) => {
     </head>
     <body>
         <div class="container">
-            <h1>🤖 Vesper-Xmd</h1>
+            <h1>🤖 JUNE-X</h1>
             <div class="status">
                 <h2>Status: <span class="online">✅ ONLINE</span></h2>
             </div>
@@ -1084,7 +1085,7 @@ app.get('/', (req, res) => {
             </div>
             <div class="footer">
                 <p>Powered by Kevin Tech | Contact: 256742932677</p>
-                <p>© 2025 Vesper-Xmd</p>
+                <p>© 2025 JUNE-X</p>
             </div>
         </div>
     </body>

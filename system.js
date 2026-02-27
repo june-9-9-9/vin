@@ -534,7 +534,7 @@ if (global.alwaysonline === true || global.alwaysonline === 'true') {
     const datez = moment(Date.now()).tz(timezones).format("DD/MM/YYYY");
 
     if (m.message) {
-      lolcatjs.fromString(`┏━━━━━━━━━━━━━『  VESPER-XMD  』━━━━━━━━━━━━━─`);
+      lolcatjs.fromString(`┏━━━━━━━━━━━━━『  JUNE-X  』━━━━━━━━━━━━━─`);
       lolcatjs.fromString(`»  Sent Time: ${dayz}, ${timez}`);
       lolcatjs.fromString(`»  Date: ${datez}`);
       lolcatjs.fromString(`»  Message Type: ${m.mtype || 'N/A'}`);
@@ -638,7 +638,7 @@ const generateMenu = (plugins, ownername, prefixz, modeStatus, versions, latensi
     }
     totalCommands = uniqueCommands.size;
 
-    let menu = `┌─❖ *VESPER-XMD* ❖─\n`;
+    let menu = `┌─❖ *JUNE-X* ❖─\n`;
     menu += `├─• ᴜsᴇʀ: ${ownername}\n`;
     menu += `├─• ʙᴏᴛ: ${global.botname}\n`;
     menu += `├─• ᴍᴏᴅᴇ: ${mode === 'public' ? 'ᴘᴜʙʟɪᴄ' : 'ᴘʀɪᴠᴀᴛᴇ'}\n`;
