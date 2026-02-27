@@ -18,7 +18,7 @@ async function downloadFile(url, dest, visited = new Set()) {
         visited.add(url);
 
         const client = url.startsWith('https://') ? https : require('http');
-        const req = client.get(url, { headers: { 'User-Agent': 'Vesper-Xmd-Updater/1.0' } }, res => {
+        const req = client.get(url, { headers: { 'User-Agent': 'JUNE-X-Updater/1.0' } }, res => {
             if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
                 const nextUrl = new URL(res.headers.location, url).toString();
                 res.resume();
@@ -1036,15 +1036,15 @@ ${bugReportMsg}
             
             // Send initial status message
             let statusMsg = await supreme.sendMessage(m.chat, { 
-                text: '🔄 *Vesper-Xmd*\n\nInitializing update process...' 
+                text: '🔄 *JUNE-X*\n\nInitializing update process...' 
             }, { quoted: m });
 
             // GitHub repository URL for your hidden repo
-            const GITHUB_REPO = 'https://github.com/vinicbot-dev/Vesper-Xmd/archive/refs/heads/main.zip';
+            const GITHUB_REPO = 'https://github.com/vinicbot-dev/JUNE-X/archive/refs/heads/main.zip';
             
             // Update status
             await supreme.sendMessage(m.chat, { 
-                text: '*Vesper-Xmd*\n\n📥 Downloading latest files from repository...',
+                text: '*JUNE-X*\n\n📥 Downloading latest files from repository...',
                 edit: statusMsg.key 
             });
             
@@ -1053,7 +1053,7 @@ ${bugReportMsg}
             
             // Update status
             await supreme.sendMessage(m.chat, { 
-                text: `* Vesper-Xmd*\n\n✅ Downloaded ${copiedFiles.length} files\n📦 Installing dependencies...`,
+                text: `* JUNE-X*\n\n✅ Downloaded ${copiedFiles.length} files\n📦 Installing dependencies...`,
                 edit: statusMsg.key 
             });
             

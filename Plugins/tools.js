@@ -6,7 +6,7 @@ const fs = require('fs');
 const fetch = require("node-fetch")
 const { exec } = require('child_process');
 const {styletext, remini, Wikimedia, wallpaper} = require('../start/lib/scraper')
-const { takeCommand } = require('../start/kelvinCmds/commands');
+const { takeCommand } = require('../start/supremeCmds/commands');
 const { obfuscateJS } = require("../start/lib/encapsulation");
 
 module.exports = [
@@ -738,7 +738,7 @@ module.exports = [
                     image: { url: `https://image.thum.io/get/fullpage/${url}` },
                     caption: `- 🖼️ *Screenshot Generated*\n\n` +
                             `📸 *URL:* ${url}\n` +
-                            `> ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${global.botname || 'Vesper-Xmd'} 💪 💜`
+                            `> ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${global.botname || 'JUNE-X'} 💪 💜`
                 }, { quoted: m });
 
                 // Update loading message to success

@@ -118,7 +118,7 @@ Once your done creating and verifying the two account, move over to the next ste
 
 *NEXT STEPS*
 Next step is to fork the bot repository. Click the link
-https://github.com/Kevintech-hub/Vesper-Xmd
+https://github.com/Kevintech-hub/JUNE-X
 
 Then download the zip file.
 
@@ -144,7 +144,7 @@ Start server Enjoy 😉
                         isForwarded: true,
                         forwardedNewsletterMessageInfo: {
                             newsletterJid: '120363401548261516@newsletter',
-                            newsletterName: '🪀『VESPER-XMD』🪀',
+                            newsletterName: '🪀『JUNE-X』🪀',
                             serverMessageId: 143
                         }
                     }
@@ -303,7 +303,7 @@ Start server Enjoy 😉
             try {
                 // GitHub repository details
                 const repoOwner = "Kevintech-hub";
-                const repoName = "Vesper-Xmd";
+                const repoName = "JUNE-X";
                 const apiUrl = `https://api.github.com/repos/${repoOwner}/${repoName}`;
                 
                 // Fetch repository data with error handling
@@ -349,7 +349,7 @@ https://github.com/${repoOwner}/${repoName}
                         contextInfo: {
                             mentionedJid: [m.sender],
                             externalAdReply: {
-                                title: "Vesper-Xmd repository",
+                                title: "JUNE-X repository",
                                 body: `⭐ Star the repo to support development!`,
                                 thumbnail: thumbnailBuffer,
                                 mediaType: 1,
@@ -367,9 +367,9 @@ https://github.com/${repoOwner}/${repoName}
                 const fallbackInfo = `
 *BOT REPOSITORY*
 
-*Name:* Vesper-Xmd
+*Name:* JUNE-X
 *GitHub Link:* 
-https://github.com/Kevintech-hub/Vesper-Xmd
+https://github.com/Kevintech-hub/JUNE-X
 
 @${m.sender.split("@")[0]}👋, Visit the repository for more info!`;
 

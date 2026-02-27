@@ -152,7 +152,7 @@ module.exports = [
                 }
 
                 const json = await res.json();
-                const botname = getSetting(botNumber, 'botname', 'Vesper-Xmd');
+                const botname = getSetting(botNumber, 'botname', 'JUNE-X');
                 const pickupLine = `*Here's a pickup line for you:*\n\n"${json.pickupline}"\n\n> *© Dropped by ${botname}*`;
 
                 await supreme.sendMessage(m.chat, { text: pickupLine }, { quoted: m });

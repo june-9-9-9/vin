@@ -18,7 +18,7 @@ module.exports = [
         
         filtered.sort((a, b) => (a.country || "").localeCompare(b.country || ""));
 
-        let text = `*🌍 Vesper-Xmd Verified Helpers*\n\n`;
+        let text = `*🌍 JUNE-X Verified Helpers*\n\n`;
         filtered.forEach((helper, index) => {
             text += `${index + 1}. ${helper.flag || ""} *${helper.country || "N/A"}*\n   • ${helper.name || "N/A"}: ${helper.number || "N/A"}\n\n`;
         });

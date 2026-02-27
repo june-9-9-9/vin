@@ -316,7 +316,7 @@ module.exports = [
             if (!text) return reply("*Which apk do you want to download?*");
             
             try {
-                const botname = global.botname || 'Vesper-Xmd';
+                const botname = global.botname || 'JUNE-X';
                 let apiUrl = await fetchJson(`https://api.bk9.dev/search/apk?q=${text}`);
                 let kelvinData = await fetchJson(`https://api.bk9.dev/download/apk?id=${apiUrl.BK9[0].id}`);
 
